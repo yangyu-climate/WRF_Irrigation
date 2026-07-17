@@ -1,0 +1,44 @@
+cff-version: 1.2.0
+message: "If you use WRF-Irrigation, please cite this paper and the appropriate WRF release."
+title: "WRF-Irrigation"
+type: software
+authors:
+  - family-names: Yu
+    given-names: Yang
+repository-code: "https://github.com/yangyu-climate/WRF_Irrigation"
+preferred-citation:
+  type: article
+  title: "A Numerical Study of the Agricultural Irrigation Effects on Summer Soil Moisture and Near-Surface Meteorology in California's Central Valley"
+  authors:
+    - family-names: Yu
+      given-names: Yang
+    - family-names: Chen
+      given-names: Shu-Hua
+    - family-names: Huang
+      given-names: Chu-Chun
+    - family-names: Paw U
+      given-names: Kyaw Tha
+    - family-names: Schmitt
+      given-names: Cameron
+    - family-names: Zhao
+      given-names: Zhan
+    - family-names: Suvočarev
+      given-names: Kosana
+    - family-names: Kisekka
+      given-names: Isaya
+    - family-names: Pyles
+      given-names: Rex D.
+    - family-names: Avise
+      given-names: Jeremy
+    - family-names: Cai
+      given-names: Chenxia
+    - family-names: Chang
+      given-names: Kuang-Yu
+    - family-names: Lo
+      given-names: Min-Hui
+  journal: "Journal of Hydrometeorology"
+  year: 2025
+  volume: 26
+  start: 641
+  end: 659
+  doi: "10.1175/JHM-D-24-0129.1"
