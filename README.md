@@ -12,10 +12,16 @@ The implementation was developed for the study:
 | --- | --- | --- | --- |
 | WRF 4.4.1 | [`wrf-4.4.1`](https://github.com/yangyu-climate/WRF_Irrigation/tree/wrf-4.4.1) | `v4.4.1-irrigation` | Version used for the published study |
 | WRF 4.4.2 | [`wrf-4.4.2`](https://github.com/yangyu-climate/WRF_Irrigation/tree/wrf-4.4.2) | `v4.4.2-irrigation` | Port for WRF 4.4.2 |
+| WRF 4.4.2 PM | [`wrf-4.4.2-pm`](https://github.com/yangyu-climate/WRF_Irrigation/tree/wrf-4.4.2-pm) | `v4.4.2-irrigation-pm` | Fixed-layer, time-averaged meteorological output for driving offline atmospheric chemistry simulations |
+| WRF 4.4.2 PMN | [`wrf-4.4.2-pmn`](https://github.com/yangyu-climate/WRF_Irrigation/tree/wrf-4.4.2-pmn) | `v4.4.2-irrigation-pmn` | Alternative fixed-layer, time-averaged meteorological driver for offline atmospheric chemistry simulations |
 | WRF 4.6.1 | [`main`](https://github.com/yangyu-climate/WRF_Irrigation/tree/main) | `v4.6.1-irrigation` | Port for WRF 4.6.1; current default branch |
 | WRF 4.6.1 with WRF-Chem/KPP | [`wrf-4.6.1-chem-kpp`](https://github.com/yangyu-climate/WRF_Irrigation/tree/wrf-4.6.1-chem-kpp) | `v4.6.1-irrigation-chem-kpp` | Derived from the WRF 4.6.1 port and integrated with WRF-Chem/KPP |
 
 The WRF-Chem/KPP branch is a compatibility and integration version. The published paper used WRF 4.4.1 and did not use WRF-Chem.
+
+### Offline atmospheric chemistry drivers
+
+The WRF 4.4.2 PM and PMN variants generate time-averaged meteorological fields on fixed vertical layers for driving atmospheric chemistry models offline. They add averaged three-dimensional wind, thermodynamic, moisture, and hydrometeor fields together with averaged surface and boundary-layer variables. These branches are model-coupling variants derived from the WRF 4.4.2 irrigation port; they are separate from the online WRF-Chem/KPP integration available for WRF 4.6.1.
 
 ## Irrigation implementation
 
