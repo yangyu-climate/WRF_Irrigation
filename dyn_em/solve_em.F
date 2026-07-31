@@ -831,6 +831,57 @@ BENCH_START(calc_p_rho_tim)
                              , feedback_is_ready=feedback_is_ready    &
                             )
 
+
+! output data for PM
+BENCH_START(cal_pm_var)
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE ( ij )
+! HHLEEDEBUG
+do jj=jps,min(jpe,jde-1) ! this was previously wrong
+do kk=kps,kpe
+do ii=ips,min(ipe,ide-1) ! this was previously wrong
+if(isnan(P_PHY(ii,kk,jj))) print *,'p_phy3 3',p_phy(ii,kk,jj)
+if(isnan(grid%p(ii,kk,jj))) print *,'solvep3 3',grid%p(ii,kk,jj)
+enddo
+enddo
+enddo
+! HHLEEEND
+      DO ij = 1 , grid%num_tiles
+
+          CALL wrf_debug ( 200 , ' call cal_pm_var' )
+          CALL cal_pm_var( config_flags, grid%itimestep,        &
+                           grid%dt,grid%u_2,grid%v_2,     &
+                           grid%w_2,grid%u_phy,grid%v_phy,             &
+                           grid%t_phy,p_phy,grid%rho,grid%z,grid%z_at_w,    &
+                          moist(ims,kms,jms,P_QV),             &
+                          moist(ims,kms,jms,P_QC),             &
+                          moist(ims,kms,jms,P_QR),             &
+                          moist(ims,kms,jms,P_QI),             &
+                          moist(ims,kms,jms,P_QS),             &
+                          moist(ims,kms,jms,P_QG),             &
+                          grid%rainncv,grid%raincv,            &
+                          grid%u10,grid%v10,grid%t2,grid%q2,   &
+                          grid%PBLH,grid%GSW,grid%GLW,         &
+                          grid%SWDOWN,grid%SWDOWNC,            &
+                          grid%upm,grid%vpm,grid%wpm,grid%tpm, &
+                          grid%ppm,grid%rpm,                   &
+                          grid%qvpm,grid%qcpm,grid%qrpm,       &
+                          grid%qipm,grid%qspm,grid%qgpm,       &
+                          grid%rhpm,grid%RAINpm,               &
+                          grid%u10pm,grid%v10pm,grid%t2pm,grid%q2pm, &
+                          grid%PBLHpm,grid%GSWpm,grid%GLWpm,   &
+                          grid%SWDOWNpm,grid%SWDOWNCpm,        &
+                          ids, ide, jds, jde, kds, kde,        &
+                          ims, ime, jms, jme, kms, kme,        &
+                          grid%i_start(ij), min(grid%i_end(ij),ide-1),    &
+                          grid%j_start(ij), min(grid%j_end(ij),jde-1),    &
+                          k_start, min(k_end,kde-1), grid%k_pm            )
+     ENDDO
+     !$OMP END PARALLEL DO
+BENCH_END(cal_pm_var)
+! end - output data for PM
+
+
 #ifdef DM_PARALLEL
        IF ( config_flags%bl_pbl_physics == MYNNPBLSCHEME2 .OR. &
             config_flags%bl_pbl_physics == MYNNPBLSCHEME3 ) THEN
