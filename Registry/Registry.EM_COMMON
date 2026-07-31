@@ -281,6 +281,54 @@ state    real   hfx_force_tend      -     dyn_em      1      -      i3rh     "HF
 state    real   lh_force_tend       -     dyn_em      1      -      i3rh     "LH_FORCE_TEND" "SCM ideal surface latent heat flux tendency" "W m-2 s-1"
 state    real   tsk_force_tend      -     dyn_em      1      -      i3rh     "TSK_FORCE_TEND" "SCM ideal surface skin temperature tendency" "W m-2 s-1"
 
+# PM model
+state    real   upm            ikj      misc       1         X     \
+ rh01 "UPM"                      "averaged x-wind component"   "m s-1"
+state    real   vpm            ikj      misc       1         Y     \
+ rh01 "VPM"                      "averaged y-wind component"   "m s-1"
+state    real   wpm            ikj      misc       1         Z     \
+ rh01 "WPM"                      "averaged z-wind component"   "m s-1"
+state    real   tpm            ikj      misc       1         -     \
+ rh01 "TPM"                      "averaged T component"    "K"
+state    real   ppm            ikj      misc       1         -     \
+ rh01 "PPM"                      "averaged P component"    "mb"
+state    real   rpm            ikj      misc       1         -     \
+ rh01 "RPM"                      "averaged rho component"    "kg/m^3"
+state    real   qvpm           ikj      misc       1         -     \
+ rh01 "QVPM"                     "averaged qv component"   "Kg Kg-1"
+state    real   qcpm           ikj      misc       1         -     \
+ rh01 "QCPM"                     "averaged qc component"   "Kg Kg-1"
+state    real   qrpm           ikj      misc       1         -     \
+ rh01 "QRPM"                     "averaged qr component"   "Kg Kg-1"
+state    real   qipm           ikj      misc       1         -     \
+ rh01 "QIPM"                     "averaged qi component"   "Kg Kg-1"
+state    real   qspm           ikj      misc       1         -     \
+ rh01 "QSPM"                     "averaged qs component"   "Kg Kg-1"
+state    real   qgpm           ikj      misc       1         -     \
+ rh01 "QGPM"                     "averaged qg component"   "Kg Kg-1"
+state    real   rhpm           ikj      misc       1         -     \
+ rh01 "RHPM"                     "averaged RH          "   " "
+state    real   RAINPM          ij      misc        1         -     \
+ rh01     "RAINPM"               "AVERAGED RAIN RATE"     "mm s-1"
+state    real   U10PM           ij      misc        1         -     \
+ rh01     "U10PM"                "AVERAGED U at 10 M"  "m s-1"
+state    real   V10PM           ij      misc        1         -     \
+ rh01     "V10PM"                "AVERAGED V at 10 M"  "m s-1"
+state    real   Q2PM            ij      misc        1         -     \
+ rh01      "Q2PM"                "AVERAGED QV at 2 M"  "kg kg-1"
+state    real   T2PM            ij      misc        1         -     \
+ rh01      "T2PM"                "AVERAGED TEMP at 2 M" "K"
+state    real   PBLHPM          ij      misc        1         -     \
+ rh01     "PBLHPM"               "AVERAGED PBL HEIGHT"     "m"
+state    real   GSWpm           ij      misc        1         -     \
+ rh01     "GSWPM"              "AVERAGED NET SHORT WAVE FLUX AT GROUND SURFACE"     "W m-2"
+state    real   GLWpm           ij      misc        1         -     \
+ rh01     "GLWPM"              "AVERAGED DOWNWARD LONG WAVE FLUX AT GROUND SURFACE" "W m-2"
+state    real   SWDOWNpm        ij      misc        1         -     \
+ rh01     "SWDOWNPM"           "AVERAGED DOWNWARD SHORT WAVE FLUX AT GROUND SURFACE" "W m-2"
+state    real   SWDOWNCpm       ij      misc        1         -     \
+ rh01     "SWDOWNCPM"          "AVERAGED DOWNWARD CLEAR-SKY SHORT WAVE FLUX AT GROUND SURFACE" "W m-2"
+
 
 # Mass
 state    real   mu              ijb     dyn_em      2         -     \
@@ -831,7 +879,7 @@ state    real   LF_URB2D       i{udr}j  misc      1        Z     ir       "LF_UR
 
 # lsm State Variables
 
-state    real   SMOIS            ilj     -          1         Z     i02rhd=(interp_mask_field:lu_index,iswater)u=(copy_fcnm)    "SMOIS"            "SOIL MOISTURE"     "m3 m-3"
+state    real   SMOIS            ilj     -          1         Z     i02rh01d=(interp_mask_field:lu_index,iswater)u=(copy_fcnm)    "SMOIS"            "SOIL MOISTURE"     "m3 m-3"
 state    real   SH2O             ilj     -          1         Z     i02rhd=(interp_mask_field:lu_index,iswater)u=(copy_fcnm)    "SH2O"             "SOIL LIQUID WATER" "m3 m-3"
 state    real   SMCREL           ilj     -          1         Z     i02rhd=(interp_mask_field:lu_index,iswater)u=(copy_fcnm)    "SMCREL"           "RELATIVE SOIL MOISTURE" ""
 state    real   XICE             ij     misc        1         -     i0124rhd=(interp_mask_field:lu_index,isice)u=(copy_fcnm)  "SEAICE"             "SEA ICE FLAG"  ""
@@ -2472,6 +2520,7 @@ rconfig   integer ideal_xland             namelist,physics	1             1      
 rconfig   real    swrad_scat              namelist,physics	1             1       irh    "SWRAD_SCAT" "SCATTERING FACTOR IN SWRAD"      ""
 rconfig   integer surface_input_source    namelist,physics	1             3       irh    "surface_input_source"          "1=static (fractional), 2=time dependent (dominant), 3=dominant cateogry from metgrid"      ""
 rconfig   integer num_soil_layers         namelist,physics	1             5       irh    "num_soil_layers"               ""      ""
+rconfig   integer k_pm                    namelist,physics      1             10      irh    "number of levels in pm"        ""      ""
 rconfig   integer num_pft_clm             namelist,physics      1            17       -      "num_pft_clm"                  ""      ""
 rconfig   logical input_pft               namelist,physics      1            .false.   h     "input_pft_flag"         "use input pft instead of USGS"      ""
 rconfig   integer maxpatch                namelist,physics      1            10       irh    "maxpatch"                      ""      ""

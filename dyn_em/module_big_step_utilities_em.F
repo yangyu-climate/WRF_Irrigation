@@ -6755,4 +6755,748 @@ END SUBROUTINE conv_t_tendf_to_moist
 
   end subroutine Cloud_tracer_nudge
 
+
+!==============================================================================
+SUBROUTINE cal_pm_var( config_flags, itimestep, dt,        &
+                       u,v,w,u_phy,v_phy,t_phy,            &
+                       p_phy,rho_phy,z,z_at_w,             &
+                       qv,qc,qr,qi,qs,qg,rainncv,raincv,   &
+                       u10,v10,t2,q2,                      &
+                       PBLH,GSW,GLW,SWDOWN,SWDOWNC,        &
+                       upm,vpm,wpm,tpm,ppm,rpm,            &
+                       qvpm,qcpm,qrpm,qipm,qspm,qgpm,      &
+                       rhpm,rainpm,u10pm,v10pm,t2pm,q2pm,  &
+                       PBLHpm,GSWpm,GLWpm,                 &
+                       SWDOWNpm,SWDOWNCpm,                 &
+                       ids, ide, jds, jde, kds, kde,       &
+                       ims, ime, jms, jme, kms, kme,       &
+                       its, ite, jts, jte, kts, kte,       &
+                       k_pm                                )
+!======================================================================
+   IMPLICIT NONE
+!======================================================================
+
+   TYPE(grid_config_rec_type   ) ,   INTENT(IN   ) :: config_flags
+
+   INTEGER,   INTENT(IN   )   ::                             &
+                                  ids,ide, jds,jde, kds,kde, &
+                                  ims,ime, jms,jme, kms,kme, &
+                                  its,ite, jts,jte, kts,kte, &
+                                  k_pm, itimestep           
+   REAL ,     INTENT(IN   )   ::  dt
+   REAL , DIMENSION( ims:ime , kms:kme , jms:jme ), INTENT(IN) :: u, v,   &
+                     w, u_phy,v_phy, t_phy, p_phy, rho_phy, z, z_at_w,    &
+                     qv, qc, qr, qi,qs,qg
+
+   REAL , DIMENSION( ims:ime , kms:kme , jms:jme ), INTENT(INOUT):: upm  ,    &
+                  vpm,wpm,tpm,ppm,rpm,qvpm,qcpm, qrpm, qipm, qspm,qgpm,rhpm
+
+   REAL , DIMENSION( ims:ime , jms:jme ),         INTENT(IN) :: rainncv,  &
+                                                                 raincv,  &
+                                                                   U10 ,  &
+                                                                   V10 ,  &
+                                                                    T2 ,  &
+                                                                    Q2 ,  &
+                                                                  PBLH ,  &
+                                                                  GSW  ,  &
+                                                                  GLW  ,  &  
+                                                                SWDOWN ,  &  
+                                                                SWDOWNC
+
+   REAL , DIMENSION( ims:ime , jms:jme ),  INTENT(INOUT)::       RAINpm,  &
+                                                                  U10pm,  &
+                                                                  V10pm,  &
+                                                                   T2pm,  &
+                                                                   Q2pm,  &
+                                                                 PBLHpm,  &
+                                                                  GSWpm,  &
+                                                                  GLWpm,  &
+                                                               SWDOWNpm,  &
+                                                              SWDOWNCpm
+
+   REAL , DIMENSION( ims:ime ,kms:kme , jms:jme )              :: zu,zv
+
+   REAL , DIMENSION( its:ite+1 ,kts:kte , jts:jte+1 )          :: rh
+   REAL , DIMENSION( its:ite+1 ,          jts:jte+1 )  :: sfc_h,sfc_h_u,sfc_h_v
+
+   REAL , DIMENSION( its:ite+1, kts:kte+1, jts:jte+1 )          :: upmtmp ,&
+                  vpmtmp,wpmtmp,tpmtmp,ppmtmp,qvpmtmp,qcpmtmp, qrpmtmp,   &
+                  qipmtmp,qspmtmp,qgpmtmp,rhpmtmp,rpmtmp
+
+   INTEGER                   ::  k_in, k_out,i,j,k,iaverage
+   INTEGER                   ::  i_start,j_start,i_end,j_end,i_end_u,j_end_v
+   INTEGER                   ::  k_start,k_end,k_end_w
+
+   REAL, dimension (10)      ::  h_h_out,h_f_out
+   REAL                      ::  es,temcc,qsw
+
+   DATA h_f_out / 35.,140.,280.,610.,1000.,1500.,2000.,3000.,4000.,5000. /
+   DATA h_h_out / 2., 87.5, 210, 445, 805, 1250, 1750, 2500, 3500, 4500. /
+
+    k_in  = kme-1
+    k_out = k_pm 
+
+    i_start=max(its,ids)
+    j_start=max(jts,jds)
+    k_start=max(kts,kds)
+    i_end  =min(ite,ide-1)
+    j_end  =min(jte,jde-1)
+    k_end  =min(kte,kde-1)
+    i_end_u=i_end
+    j_end_v=j_end
+    k_end_w=k_end
+
+!    print*,'ite=',ite,'jte=',jte,i_end,j_end
+
+    if (ite .eq. ide-1 ) i_end_u=ide
+    if (jte .eq. jde-1 ) j_end_v=jde
+    if (kte .eq. kde-1 ) k_end_w=kde
+             
+    upmtmp=0.
+    vpmtmp=0.
+    wpmtmp=0.
+    tpmtmp=0.
+    ppmtmp=0.
+    rpmtmp=0.
+    qvpmtmp=0.
+    qcpmtmp=0.
+    qrpmtmp=0.
+    qipmtmp=0.
+    qspmtmp=0.
+    qgpmtmp=0.
+    rhpmtmp=0.
+
+    rh = 0.
+    zu = 10000000.
+    zv = 10000000.
+    sfc_h_u = 10000000.
+    sfc_h_v = 10000000.
+
+    do j=j_start,j_end
+    do k=kts,kte
+    do i=i_start,i_end
+         temcc=t_phy(i,k,j)-273.15
+         es=1000.*svp1*exp( svp2*temcc/(t_phy(i,k,j)-svp3) )
+         if (temcc .lt. 0. ) &
+            es=1000.*svp1*exp( 21.8745584*(t_phy(i,k,j)-273.16)/(t_phy(i,k,j)-7.66) )
+         qsw=ep_2*es/(p_phy(i,k,j)-es)
+         rh(i,k,j)=qv(i,k,j)/qsw
+!         if (k .eq. kts) then
+!            if (i .eq. 43 .and. (j .eq. 54 .or. j .eq. 64) ) then
+!               print*,i,j,rh(i,k,j),qv(i,k,j),qsw,p_phy(i,k,j),t_phy(i,k,j)
+!            endif
+!            if (i .eq. 48 .and. (j .eq. 74 )) then
+!               print*,i,j,rh(i,k,j),qv(i,k,j),qsw,p_phy(i,k,j),t_phy(i,k,j)
+!            endif
+!         endif
+    enddo
+    enddo
+    enddo
+
+! calculate height at u and v points
+
+!    do j=j_start,j_end
+!    do i=i_start,i_end
+!       sfc_h(i,j)=z_at_w(i,1,j)
+!    enddo
+!    enddo
+
+!    call cal_height_u (z,z_at_w,zu,sfc_h_u,                   &
+!                       ids, ide, jds, jde, kds, kde,          &
+!                       ims, ime, jms, jme, kms, kme,          &
+!                       its, ite, jts, jte, kts, kte,          &
+!                       i_start,i_end,j_start,j_end            )
+
+!    call cal_height_v (z,z_at_w,zv,sfc_h_v,                   &
+!                       ids, ide, jds, jde, kds, kde,          &
+!                       ims, ime, jms, jme, kms, kme,          &
+!                       its, ite, jts, jte, kts, kte,          &
+!                       i_start,i_end,j_start,j_end            )
+
+!   print*,zu
+!   print*
+!   print*,i_end_u,j_end_v
+! w
+!    call vertical_interp_new(k_in,k_out,z_at_w,sfc_h,w,h_f_out,wpmtmp,   &
+!                         ids, ide, jds, jde, kds, kde,   &
+!                         ims, ime, jms, jme, kms, kme,   &
+!                         its, ite, jts, jte, kts, kte,   &
+!                         i_start,i_end,j_start,j_end     )
+! u
+!    call vertical_interp_v(k_in,k_out,zu,sfc_h_u,u,h_h_out,upmtmp,   &
+!                         ids, ide, jds, jde, kds, kde,   &
+!                         ims, ime, jms, jme, kms, kme,   &
+!                         its, ite, jts, jte, kts, kte,   &
+!                         i_start,i_end_u,j_start,j_end   )
+! v
+!    call vertical_interp_v(k_in,k_out,zv,sfc_h_v,v,h_h_out,vpmtmp,   &
+!                         ids, ide, jds, jde, kds, kde,   &
+!                         ims, ime, jms, jme, kms, kme,   &
+!                         its, ite, jts, jte, kts, kte,   &
+!                         i_start,i_end,j_start,j_end_v   )
+! t
+!    call vertical_interp_new(k_in,k_out,z,sfc_h ,t_phy,h_h_out,tpmtmp,   &
+!                         ids, ide, jds, jde, kds, kde,   &
+!                         ims, ime, jms, jme, kms, kme,   &
+!                         its, ite, jts, jte, kts, kte,   &
+!                         i_start,i_end,j_start,j_end     )
+! p  
+!    call vertical_interp_new(k_in,k_out,z,sfc_h ,p_phy,h_h_out,ppmtmp,   &
+!                         ids, ide, jds, jde, kds, kde,   &
+!                         ims, ime, jms, jme, kms, kme,   &
+!                         its, ite, jts, jte, kts, kte,   &
+!                         i_start,i_end,j_start,j_end     )
+! rho
+!    call vertical_interp_new(k_in,k_out,z,sfc_h ,rho_phy,h_h_out,rpmtmp,   &
+!                         ids, ide, jds, jde, kds, kde,   &
+!                         ims, ime, jms, jme, kms, kme,   &
+!                         its, ite, jts, jte, kts, kte,   &
+!                         i_start,i_end,j_start,j_end     )
+! qv
+!    call vertical_interp_new(k_in,k_out,z,sfc_h ,qv,h_h_out,qvpmtmp,     &
+!                         ids, ide, jds, jde, kds, kde,   &
+!                         ims, ime, jms, jme, kms, kme,   &
+!                         its, ite, jts, jte, kts, kte,   &
+!                         i_start,i_end,j_start,j_end     )
+! qc
+!    call vertical_interp_new(k_in,k_out,z,sfc_h ,qc,h_h_out,qcpmtmp,     &
+!                         ids, ide, jds, jde, kds, kde,   &
+!                         ims, ime, jms, jme, kms, kme,   &
+!                         its, ite, jts, jte, kts, kte,   &
+!                         i_start,i_end,j_start,j_end     )
+! qr
+!    call vertical_interp_new(k_in,k_out,z,sfc_h ,qr,h_h_out,qrpmtmp,     &
+!                         ids, ide, jds, jde, kds, kde,   &
+!                         ims, ime, jms, jme, kms, kme,   &
+!                         its, ite, jts, jte, kts, kte,   &
+!                         i_start,i_end,j_start,j_end     )
+! qi
+!    call vertical_interp_new(k_in,k_out,z,sfc_h ,qi,h_h_out,qipmtmp,     &
+!                         ids, ide, jds, jde, kds, kde,   &
+!                         ims, ime, jms, jme, kms, kme,   &
+!                         its, ite, jts, jte, kts, kte,   &
+!                         i_start,i_end,j_start,j_end     )
+! qs
+!    call vertical_interp_new(k_in,k_out,z,sfc_h ,qs,h_h_out,qspmtmp,     &
+!                         ids, ide, jds, jde, kds, kde,   &
+!                         ims, ime, jms, jme, kms, kme,   &
+!                         its, ite, jts, jte, kts, kte,   &
+!                         i_start,i_end,j_start,j_end     )
+! qg
+!    call vertical_interp_new(k_in,k_out,z,sfc_h ,qg,h_h_out,qgpmtmp,     &
+!                         ids, ide, jds, jde, kds, kde,   &
+!                         ims, ime, jms, jme, kms, kme,   &
+!                         its, ite, jts, jte, kts, kte,   &
+!                         i_start,i_end,j_start,j_end     )
+! rh
+!    call vertical_interp_rh(k_in,k_out,z,sfc_h ,rh,h_h_out,rhpmtmp,     &
+!                         ids, ide, jds, jde, kds, kde,   &
+!                         ims, ime, jms, jme, kms, kme,   &
+!                         its, ite, jts, jte, kts, kte,   &
+!                         i_start,i_end,j_start,j_end     )
+
+! summation and average
+
+    iaverage=config_flags%auxhist1_interval*60./dt
+    if (iaverage .lt. 1) &
+       print*,'please specify auxhist1_interval value in namelist.input.'
+
+!    print*,'iaveage=',itimestep,iaverage,config_flags%auxhist1_interval,dt
+    if (mod(itimestep,iaverage) .eq. 0 .and. itimestep .gt. 1) then
+! jianlin Nov,09
+! Add the last time step values
+       do j=j_start,j_end
+       do i=i_start,i_end
+          RAINpm(i,j)    =RAINpm(i,j)   + RAINNCV(i,j) + RAINCV(i,j)
+          U10pm(i,j)     =U10pm(i,j)    + U10(i,j)
+          V10pm(i,j)     =V10pm(i,j)    + V10(i,j)
+          T2pm(i,j)      =T2pm(i,j)     + T2(i,j)
+          Q2pm(i,j)      =Q2pm(i,j)     + Q2(i,j)
+          PBLHpm(i,j)    =PBLHpm(i,j)   + PBLH(i,j)
+          GSWpm(i,j)     =GSWpm(i,j)    + GSW(i,j)
+          GLWpm(i,j)     =GLWpm(i,j)    + GLW(i,j)
+          SWDOWNpm(i,j)  =SWDOWNpm(i,j) + SWDOWN(i,j)
+          SWDOWNCpm(i,j) =SWDOWNCpm(i,j)+ SWDOWNC(i,j)
+       enddo
+       enddo
+
+       do j=j_start,j_end
+       do k=k_start,k_end
+       do i=i_start,i_end
+          tpm(i,k,j) =tpm(i,k,j) +t_phy(i,k,j)
+          ppm(i,k,j) =ppm(i,k,j) +p_phy(i,k,j)
+          rpm(i,k,j) =rpm(i,k,j) +rho_phy(i,k,j)
+          qvpm(i,k,j)=qvpm(i,k,j)+qv(i,k,j)
+          qcpm(i,k,j)=qcpm(i,k,j)+qc(i,k,j)
+          qrpm(i,k,j)=qrpm(i,k,j)+qr(i,k,j)
+          qipm(i,k,j)=qipm(i,k,j)+qi(i,k,j)
+          qspm(i,k,j)=qspm(i,k,j)+qs(i,k,j)
+          qgpm(i,k,j)=qgpm(i,k,j)+qg(i,k,j)
+          rhpm(i,k,j)=rhpm(i,k,j)+rh(i,k,j)
+       enddo
+       enddo
+       enddo
+
+       do j=j_start,j_end
+       do k=k_start,k_end_w
+       do i=i_start,i_end
+          wpm(i,k,j) =wpm(i,k,j) +w(i,k,j)
+       enddo
+       enddo
+       enddo
+
+       do j=j_start,j_end
+       do k=k_start,k_end
+       do i=i_start,i_end_u
+          upm(i,k,j) =upm(i,k,j) +u(i,k,j)
+       enddo
+       enddo
+       enddo
+
+       do j=j_start,j_end_v
+       do k=k_start,k_end
+       do i=i_start,i_end
+          vpm(i,k,j) =vpm(i,k,j) +v(i,k,j)
+       enddo
+       enddo
+       enddo
+! end of adding the last time step values
+!       print*,'jianlin marker0: ',t2pm(1,1),t2(1,1)
+! calculating the hourly average variables
+       do j=j_start,j_end
+       do i=i_start,i_end
+          RAINpm(i,j)   =RAINpm(i,j)/real(config_flags%auxhist1_interval*60.)
+!         RAINpm(i,j)   =RAINpm(i,j)
+          U10pm(i,j)    =U10pm(i,j)/real(iaverage)
+          V10pm(i,j)    =V10pm(i,j)/real(iaverage)
+          T2pm(i,j)     =T2pm(i,j)/real(iaverage)
+          Q2pm(i,j)     =Q2pm(i,j)/real(iaverage)
+          PBLHpm(i,j)   =PBLHpm(i,j)/real(iaverage)
+          GSWpm(i,j)    =GSWpm(i,j)/real(iaverage)
+          GLWpm(i,j)    =GLWpm(i,j)/real(iaverage)
+          SWDOWNpm(i,j) =SWDOWNpm(i,j)/real(iaverage)
+          SWDOWNCpm(i,j)=SWDOWNCpm(i,j)/real(iaverage)
+       enddo
+       enddo
+
+       do j=j_start,j_end
+       do k=k_start,k_end
+       do i=i_start,i_end
+          tpm(i,k,j) =tpm(i,k,j)/real(iaverage)
+          ppm(i,k,j) =ppm(i,k,j)/real(iaverage)
+          rpm(i,k,j) =rpm(i,k,j)/real(iaverage)
+          qvpm(i,k,j)=qvpm(i,k,j)/real(iaverage)
+          qcpm(i,k,j)=qcpm(i,k,j)/real(iaverage)
+          qrpm(i,k,j)=qrpm(i,k,j)/real(iaverage)
+          qipm(i,k,j)=qipm(i,k,j)/real(iaverage)
+          qspm(i,k,j)=qspm(i,k,j)/real(iaverage)
+          qgpm(i,k,j)=qgpm(i,k,j)/real(iaverage)
+          rhpm(i,k,j)=rhpm(i,k,j)/real(iaverage)
+       enddo
+       enddo
+       enddo
+
+       do j=j_start,j_end
+       do k=k_start,k_end_w
+       do i=i_start,i_end
+          wpm(i,k,j) =wpm(i,k,j)/real(iaverage)
+       enddo
+       enddo
+       enddo
+
+       do j=j_start,j_end
+       do k=k_start,k_end
+       do i=i_start,i_end_u
+          upm(i,k,j) =upm(i,k,j)/real(iaverage)
+       enddo
+       enddo
+       enddo
+
+       do j=j_start,j_end_v
+       do k=k_start,k_end
+       do i=i_start,i_end
+          vpm(i,k,j) =vpm(i,k,j)/real(iaverage)
+       enddo
+       enddo
+       enddo
+!       print*,'jianlin marker1: ', t2pm(1,1),iaverage
+    else
+       if (mod(itimestep,iaverage) .eq. 1) then
+! initialization
+          do j=j_start,j_end
+          do i=i_start,i_end
+             RAINpm    (i,j)= 0.
+             U10pm     (i,j)= 0.
+             V10pm     (i,j)= 0.
+             T2pm      (i,j)= 0.
+             Q2pm      (i,j)= 0.
+             PBLHpm    (i,j)= 0.
+             GSWpm     (i,j)= 0.
+             GLWpm     (i,j)= 0.
+             SWDOWNpm  (i,j)= 0.
+             SWDOWNCpm (i,j)= 0.
+          enddo
+          enddo
+
+          do j=j_start,j_end
+          do k=k_start,k_end
+          do i=i_start,i_end
+             tpm (i,k,j)=0.
+             ppm (i,k,j)=0.
+             rpm (i,k,j)=0.
+             qvpm(i,k,j)=0.
+             qcpm(i,k,j)=0.
+             qrpm(i,k,j)=0.
+             qipm(i,k,j)=0.
+             qspm(i,k,j)=0.
+             qgpm(i,k,j)=0.
+             rhpm(i,k,j)=0.
+          enddo
+          enddo
+          enddo
+
+          do j=j_start,j_end
+          do k=k_start,k_end_w
+          do i=i_start,i_end
+             wpm (i,k,j)=0.
+          enddo
+          enddo
+          enddo
+
+          do j=j_start,j_end
+          do k=k_start,k_end
+          do i=i_start,i_end_u
+             upm (i,k,j)=0.
+          enddo
+          enddo
+          enddo
+
+          do j=j_start,j_end_v
+          do k=k_start,k_end
+          do i=i_start,i_end
+             vpm (i,k,j)=0.
+          enddo
+          enddo
+          enddo
+
+       endif
+
+       do j=j_start,j_end
+       do i=i_start,i_end
+          RAINpm(i,j)    =RAINpm(i,j)   + RAINNCV(i,j) + RAINCV(i,j)
+          U10pm(i,j)     =U10pm(i,j)    + U10(i,j)
+          V10pm(i,j)     =V10pm(i,j)    + V10(i,j)
+          T2pm(i,j)      =T2pm(i,j)     + T2(i,j)
+          Q2pm(i,j)      =Q2pm(i,j)     + Q2(i,j)
+          PBLHpm(i,j)    =PBLHpm(i,j)   + PBLH(i,j)
+          GSWpm(i,j)     =GSWpm(i,j)    + GSW(i,j)
+          GLWpm(i,j)     =GLWpm(i,j)    + GLW(i,j)
+          SWDOWNpm(i,j)  =SWDOWNpm(i,j) + SWDOWN(i,j)
+          SWDOWNCpm(i,j) =SWDOWNCpm(i,j)+ SWDOWNC(i,j)
+       enddo
+       enddo
+
+       do j=j_start,j_end
+       do k=k_start,k_end
+       do i=i_start,i_end
+          tpm(i,k,j) =tpm(i,k,j) +t_phy(i,k,j)
+          ppm(i,k,j) =ppm(i,k,j) +p_phy(i,k,j)
+          rpm(i,k,j) =rpm(i,k,j) +rho_phy(i,k,j)
+          qvpm(i,k,j)=qvpm(i,k,j)+qv(i,k,j)
+          qcpm(i,k,j)=qcpm(i,k,j)+qc(i,k,j)
+          qrpm(i,k,j)=qrpm(i,k,j)+qr(i,k,j)
+          qipm(i,k,j)=qipm(i,k,j)+qi(i,k,j)
+          qspm(i,k,j)=qspm(i,k,j)+qs(i,k,j)
+          qgpm(i,k,j)=qgpm(i,k,j)+qg(i,k,j)
+          rhpm(i,k,j)=rhpm(i,k,j)+rh(i,k,j)
+       enddo
+       enddo
+       enddo
+
+       do j=j_start,j_end
+       do k=k_start,k_end_w
+       do i=i_start,i_end
+          wpm(i,k,j) =wpm(i,k,j) +w(i,k,j)
+       enddo
+       enddo
+       enddo
+
+       do j=j_start,j_end
+       do k=k_start,k_end
+       do i=i_start,i_end_u
+          upm(i,k,j) =upm(i,k,j) +u(i,k,j)
+       enddo
+       enddo
+       enddo
+
+       do j=j_start,j_end_v
+       do k=k_start,k_end
+       do i=i_start,i_end
+          vpm(i,k,j) =vpm(i,k,j) +v(i,k,j)
+       enddo
+       enddo
+       enddo
+!       print*, 'jianlin marker2: ', t2pm(1,1),t2(1,1)
+
+    endif
+
+END SUBROUTINE cal_pm_var
+!==============================================================================
+
+SUBROUTINE vertical_interp_new(k_in,k_out,h_in3d,sfch_2d,        &
+                           var_in3d,h_out1d,var_out3d,       &
+                           ids, ide, jds, jde, kds, kde,     &
+                           ims, ime, jms, jme, kms, kme,     &
+                           its, ite, jts, jte, kts, kte,     &
+                           i_start,i_end,j_start,j_end       )
+  
+    INTEGER,   INTENT(IN   ) :: ids,ide, jds,jde, kds,kde,   &
+                                ims,ime, jms,jme, kms,kme,   &
+                                its,ite, jts,jte, kts,kte,   &
+                                i_start,i_end,j_start,j_end, &
+                                k_in,k_out
+
+    real, intent(in),   dimension(ims:ime,kms:kme,jms:jme) :: var_in3d,h_in3d
+    real, intent(in),   dimension(its:ite+1, jts:jte+1 )   :: sfch_2d
+    real, intent(in),   dimension(        k_out        )   :: h_out1d
+    real, intent(inout),dimension(its:ite+1,k_out,jts:jte+1):: var_out3d
+    integer               :: i,j,k,kk
+    real                  :: wt1,wt2,sfch
+
+    do j=j_start,j_end
+    do i=i_start,i_end
+       sfch = sfch_2d(i,j)
+       do kk=1,k_out
+          do k=1,k_in-1
+             if(h_out1d(kk) .GE. (h_in3d(i,k,j)  -sfch) .AND.  &
+                h_out1d(kk) .LT. (h_in3d(i,k+1,j)-sfch)) then
+                wt1=h_in3d(i,k+1,j)-sfch-h_out1d(kk)
+                wt2=h_out1d(kk)-h_in3d(i,k,j)+sfch
+                var_out3d(i,kk,j)=(wt1*var_in3d(i,k,j)+ &
+                                   wt2*var_in3d(i,k+1,j))/(wt1+wt2)
+                goto 101
+             else if(h_out1d(kk) .LT. (h_in3d(i,1,j)-sfch)) then
+                var_out3d(i,kk,j)=var_in3d(i,1,j)- &
+                                 (var_in3d(i,2,j)-var_in3d(i,1,j))/ &
+                                 (h_in3d  (i,2,j)-h_in3d  (i,1,j))* &
+                                 (h_in3d  (i,1,j)-sfch-h_out1d(kk))
+                goto 101
+             endif
+          enddo
+ 101      continue
+       enddo
+    enddo
+    enddo
+
+END SUBROUTINE vertical_interp_new
+
+SUBROUTINE vertical_interp_v(k_in,k_out,h_in3d,sfch_2d,      &
+                           var_in3d,h_out1d,var_out3d,       &
+                           ids, ide, jds, jde, kds, kde,     &
+                           ims, ime, jms, jme, kms, kme,     &
+                           its, ite, jts, jte, kts, kte,     &
+                           i_start,i_end,j_start,j_end       )
+  
+    INTEGER,   INTENT(IN   ) :: ids,ide, jds,jde, kds,kde,   &
+                                ims,ime, jms,jme, kms,kme,   &
+                                its,ite, jts,jte, kts,kte,   &
+                                i_start,i_end,j_start,j_end, &
+                                k_in,k_out
+
+    real, intent(in),   dimension(ims:ime,kms:kme,jms:jme) :: var_in3d,h_in3d
+    real, intent(in),   dimension(its:ite+1, jts:jte+1 )   :: sfch_2d
+    real, intent(in),   dimension(        k_out        )   :: h_out1d
+    real, intent(inout),dimension(its:ite+1,k_out,jts:jte+1):: var_out3d
+    integer               :: i,j,k,kk
+    real                  :: wt1,wt2,sfch
+
+    do j=j_start,j_end
+    do i=i_start,i_end
+       sfch = sfch_2d(i,j)
+       do kk=1,k_out
+          do k=1,k_in-1
+             if(h_out1d(kk) .GE. (h_in3d(i,k,j)  -sfch) .AND.  &
+                h_out1d(kk) .LT. (h_in3d(i,k+1,j)-sfch)) then
+                wt1=h_in3d(i,k+1,j)-sfch-h_out1d(kk)
+                wt2=h_out1d(kk)-h_in3d(i,k,j)+sfch
+                var_out3d(i,kk,j)=(wt1*var_in3d(i,k,j)+ &
+                                   wt2*var_in3d(i,k+1,j))/(wt1+wt2)
+                goto 101
+             else if(h_out1d(kk) .LT. (h_in3d(i,1,j)-sfch)) then
+!               var_out3d(i,kk,j)=var_in3d(i,1,j)- &
+!                                (var_in3d(i,2,j)-var_in3d(i,1,j))/ &
+!                                (h_in3d  (i,2,j)-h_in3d  (i,1,j))* &
+!                                (h_in3d  (i,1,j)-sfch-h_out1d(kk))
+                var_out3d(i,kk,j)=var_in3d(i,1,j)*                  &
+                                  log(h_out1d(kk)/0.0001)/          &
+                                  log((h_in3d(i,1,j)-sfch)-0.0001)
+                goto 101
+             endif
+          enddo
+ 101      continue
+       enddo
+    enddo
+    enddo
+
+END SUBROUTINE vertical_interp_v
+
+SUBROUTINE vertical_interp_rh(k_in,k_out,h_in3d,sfch_2d,     &
+                           var_in3d,h_out1d,var_out3d,       &
+                           ids, ide, jds, jde, kds, kde,     &
+                           ims, ime, jms, jme, kms, kme,     &
+                           its, ite, jts, jte, kts, kte,     &
+                           i_start,i_end,j_start,j_end       )
+
+   INTEGER,   INTENT(IN   )   ::                             &
+                                ids,ide, jds,jde, kds,kde,   &
+                                ims,ime, jms,jme, kms,kme,   &
+                                its,ite, jts,jte, kts,kte,   &
+                                i_start,i_end,j_start,j_end, &
+                                k_in,k_out
+
+    real, intent(in),   dimension(its:ite+1,kts:kte,jts:jte+1) :: var_in3d
+    real, intent(in),   dimension(ims:ime,kms:kme,jms:jme)     :: h_in3d
+    real, intent(in),   dimension(its:ite+1, jts:jte+1 )       :: sfch_2d
+    real, intent(in),   dimension(        k_out        )       :: h_out1d
+    real, intent(inout),dimension(its:ite+1,k_out,jts:jte+1)   :: var_out3d
+    integer               :: i,j,k,kk
+    real                  :: wt1,wt2,sfch
+
+    do j=j_start,j_end
+    do i=i_start,i_end
+       sfch = sfch_2d(i,j)
+       do kk=1,k_out
+          do k=1,k_in-1
+             if(h_out1d(kk) .GE. (h_in3d(i,k,j)  -sfch) .AND.  &
+                h_out1d(kk) .LT. (h_in3d(i,k+1,j)-sfch)) then
+                wt1=h_in3d(i,k+1,j)-sfch-h_out1d(kk)
+                wt2=h_out1d(kk)-h_in3d(i,k,j)+sfch
+                var_out3d(i,kk,j)=(wt1*var_in3d(i,k,j)+ &
+                                   wt2*var_in3d(i,k+1,j))/(wt1+wt2)
+                goto 101
+             else if(h_out1d(kk) .LT. (h_in3d(i,1,j)-sfch)) then
+                var_out3d(i,kk,j)=var_in3d(i,1,j)- &
+                                 (var_in3d(i,2,j)-var_in3d(i,1,j))/ &
+                                 (h_in3d  (i,2,j)-h_in3d  (i,1,j))* &
+                                 (h_in3d  (i,1,j)-sfch-h_out1d(kk))
+                goto 101
+             endif
+          enddo
+ 101      continue
+       enddo
+    enddo
+    enddo
+
+END SUBROUTINE vertical_interp_rh
+
+!==================================================================
+   subroutine cal_height_u (z,z_at_w,zu,sfc_h_u,                  &
+                           ids, ide, jds, jde, kds, kde,          &
+                           ims, ime, jms, jme, kms, kme,          &
+                           its, ite, jts, jte, kts, kte,          &
+                           i_start,i_end,j_start,j_end            )
+   IMPLICIT NONE
+   INTEGER,   INTENT(IN   )   ::                                  &
+                                  ids,ide, jds,jde, kds,kde,      &
+                                  ims,ime, jms,jme, kms,kme,      &
+                                  its,ite, jts,jte, kts,kte,      &
+                                  i_start,i_end,j_start,j_end            
+
+   REAL, INTENT(IN ), DIMENSION( ims:ime,kms:kme,jms:jme ):: z,z_at_w
+   REAL, INTENT(OUT), DIMENSION( ims:ime,kms:kme,jms:jme ):: zu
+   REAL, INTENT(OUT), DIMENSION( its:ite+1, jts:jte+1 )   :: sfc_h_u
+   integer               :: i,j,k
+ 
+   sfc_h_u = 10000000.
+    
+   do j=j_start,j_end
+   do i=max(2,i_start),i_end
+      sfc_h_u(i,j)=(z_at_w(i-1,1,j)+z_at_w(i,1,j))*0.5
+      do k=kts,kte
+         zu(i,k,j)=(z(i-1,k,j)+z(i,k,j))*0.5
+      enddo
+   enddo
+   enddo
+
+   if (its .eq. 1 )  then
+      i=1
+      do j=j_start,j_end
+         sfc_h_u(i,j)=z_at_w(2,1,j)
+         do k=kts,kte
+            zu(i,k,j)=z(2,k,j)
+         enddo
+      enddo
+   endif
+
+   if (ite .eq. ide-1 )  then
+      i=ide
+      do j=j_start,j_end
+         sfc_h_u(i,j)=z_at_w(i-1,1,j)
+         do k=kts,kte
+            zu(i,k,j)=z(i-1,k,j)
+         enddo
+      enddo
+   endif
+
+   end subroutine cal_height_u
+
+!===================================================================
+   subroutine cal_height_v (z,z_at_w,zv,sfc_h_v,                   &
+                            ids, ide, jds, jde, kds, kde,          &
+                            ims, ime, jms, jme, kms, kme,          &
+                            its, ite, jts, jte, kts, kte,          &
+                            i_start,i_end,j_start,j_end            )
+   IMPLICIT NONE
+   INTEGER,   INTENT(IN   )   ::                                   &
+                                  ids,ide, jds,jde, kds,kde,       &
+                                  ims,ime, jms,jme, kms,kme,       &
+                                  its,ite, jts,jte, kts,kte,       &
+                                  i_start,i_end,j_start,j_end                 
+                                                                                                                
+   REAL, INTENT(IN ), DIMENSION( ims:ime,kms:kme,jms:jme ):: z,z_at_w
+   REAL, INTENT(OUT), DIMENSION( ims:ime,kms:kme,jms:jme ):: zv
+   REAL, INTENT(OUT), DIMENSION( its:ite+1, jts:jte+1 )   :: sfc_h_v
+   integer               :: i,j,k
+
+   sfc_h_v = 10000000.
+
+   do j=max(2,j_start),j_end
+   do i=i_start,i_end
+      sfc_h_v(i,j)=(z_at_w(i,1,j-1)+z_at_w(i,1,j))*0.5
+      do k=kts,kte
+         zv(i,k,j)=(z(i,k,j-1)+z(i,k,j))*0.5
+      enddo
+   enddo
+   enddo
+
+   if (jts .eq. 1 )  then
+     j=1
+      do i=i_start,i_end
+         sfc_h_v(i,j)=z_at_w(i,1,2)
+         do k=kts,kte
+            zv(i,k,j)=z(i,k,2)
+         enddo
+      enddo
+   endif
+
+   if (jte .eq. jde-1 ) then
+     j=jde
+     do i=i_start,i_end
+        sfc_h_v(i,j)=z_at_w(i,1,j-1)
+        do k=kts,kte
+           zv(i,k,j)=z(i,k,j-1)
+        enddo
+     enddo
+  endif
+
+  end subroutine cal_height_v
+
+
+
+
+
+
+
+
+
 END MODULE module_big_step_utilities_em
